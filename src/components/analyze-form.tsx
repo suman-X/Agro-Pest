@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -25,89 +25,15 @@ export function AnalyzeForm({ onAnalysisComplete }: AnalyzeFormProps) {
     const [isLoading, setIsLoading] = useState(false)
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
     const [selectedFile, setSelectedFile] = useState<File | null>(null)
-    const [uploadMethod, setUploadMethod] = useState<'upload' | 'capture'>('upload')
-    const videoRef = useRef<HTMLVideoElement>(null)
-    const canvasRef = useRef<HTMLCanvasElement>(null)
-    const [isCameraActive, setIsCameraActive] = useState(false)
     
     const { register, handleSubmit, formState: { errors } } = useForm({
         resolver: zodResolver(formSchema),
     })
 
-    const startCamera = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { 
-                    facingMode: { exact: 'environment' }, // Force back camera
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
-                } 
-            })
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream
-                setIsCameraActive(true)
-                setUploadMethod('capture')
-            }
-        } catch (error) {
-            // Fallback if exact environment camera not available
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'environment' }
-                })
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream
-                    setIsCameraActive(true)
-                    setUploadMethod('capture')
-                }
-            } catch (fallbackError) {
-                console.error("Camera access denied", fallbackError)
-                alert("Unable to access camera. Please check permissions or use file upload.")
-            }
-        }
-    }
-
-    const stopCamera = () => {
-        if (videoRef.current && videoRef.current.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream
-            stream.getTracks().forEach(track => track.stop())
-            videoRef.current.srcObject = null
-            setIsCameraActive(false)
-        }
-    }
-
-    const capturePhoto = () => {
-        if (videoRef.current && canvasRef.current) {
-            const video = videoRef.current
-            const canvas = canvasRef.current
-            
-            canvas.width = video.videoWidth
-            canvas.height = video.videoHeight
-            
-            const ctx = canvas.getContext('2d')
-            if (ctx) {
-                ctx.drawImage(video, 0, 0)
-                const imageDataUrl = canvas.toDataURL('image/jpeg')
-                setCapturedImage(imageDataUrl)
-                
-                // Convert to file
-                canvas.toBlob((blob) => {
-                    if (blob) {
-                        const file = new File([blob], 'captured-image.jpg', { type: 'image/jpeg' })
-                        setSelectedFile(file)
-                    }
-                }, 'image/jpeg')
-                
-                stopCamera()
-            }
-        }
-    }
-
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (file) {
             setSelectedFile(file)
-            setCapturedImage(null)
-            setUploadMethod('upload')
             
             // Create preview
             const reader = new FileReader()
@@ -121,7 +47,6 @@ export function AnalyzeForm({ onAnalysisComplete }: AnalyzeFormProps) {
     const clearImage = () => {
         setCapturedImage(null)
         setSelectedFile(null)
-        stopCamera()
     }
 
     const onSubmit = async (data: any) => {
@@ -175,69 +100,42 @@ export function AnalyzeForm({ onAnalysisComplete }: AnalyzeFormProps) {
                         <Label>Leaf Image</Label>
                         
                         {/* Image capture/upload options */}
-                        {!capturedImage && !isCameraActive && (
+                        {!capturedImage && (
                             <div className="grid grid-cols-2 gap-2">
-                                <Button 
-                                    type="button" 
-                                    variant="outline" 
-                                    onClick={startCamera}
-                                    className="w-full"
-                                >
-                                    <Camera className="mr-2 h-4 w-4" />
-                                    Capture Photo
-                                </Button>
-                                <Button 
-                                    type="button" 
-                                    variant="outline" 
-                                    onClick={() => document.getElementById('file-upload')?.click()}
-                                    className="w-full"
-                                >
-                                    <Upload className="mr-2 h-4 w-4" />
-                                    Upload File
-                                </Button>
+                                <label htmlFor="camera-capture" className="w-full">
+                                    <div className="flex items-center justify-center w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer">
+                                        <Camera className="mr-2 h-4 w-4" />
+                                        Capture Photo
+                                    </div>
+                                </label>
+                                <label htmlFor="file-upload" className="w-full">
+                                    <div className="flex items-center justify-center w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer">
+                                        <Upload className="mr-2 h-4 w-4" />
+                                        Upload File
+                                    </div>
+                                </label>
                             </div>
                         )}
 
                         <input
-                            id="file-upload"
+                            id="camera-capture"
                             type="file"
                             accept="image/*"
                             capture="environment"
                             onChange={handleFileChange}
                             className="hidden"
                         />
-
-                        {/* Camera view */}
-                        {isCameraActive && (
-                            <div className="relative">
-                                <video
-                                    ref={videoRef}
-                                    autoPlay
-                                    playsInline
-                                    className="w-full rounded-lg border"
-                                />
-                                <div className="flex gap-2 mt-2">
-                                    <Button 
-                                        type="button" 
-                                        onClick={capturePhoto}
-                                        className="flex-1"
-                                    >
-                                        <Camera className="mr-2 h-4 w-4" />
-                                        Capture
-                                    </Button>
-                                    <Button 
-                                        type="button" 
-                                        variant="outline"
-                                        onClick={stopCamera}
-                                    >
-                                        Cancel
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
+                        
+                        <input
+                            id="file-upload"
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileChange}
+                            className="hidden"
+                        />
 
                         {/* Image preview */}
-                        {capturedImage && !isCameraActive && (
+                        {capturedImage && (
                             <div className="relative">
                                 <div className="relative w-full h-64 rounded-lg border overflow-hidden">
                                     <Image
@@ -259,8 +157,6 @@ export function AnalyzeForm({ onAnalysisComplete }: AnalyzeFormProps) {
                                 </Button>
                             </div>
                         )}
-
-                        <canvas ref={canvasRef} className="hidden" />
                     </div>
 
                     <Button type="submit" className="w-full" disabled={isLoading || !selectedFile}>
