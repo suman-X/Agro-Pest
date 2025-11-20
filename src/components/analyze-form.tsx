@@ -62,16 +62,18 @@ export function AnalyzeForm({ onAnalysisComplete }: AnalyzeFormProps) {
             formData.append("location", data.location)
             formData.append("image", selectedFile)
 
-            const response = await axios.post("http://localhost:3001/analyze", formData, {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
+            const response = await axios.post(`${apiUrl}/analyze`, formData, {
                 headers: {
                     "Content-Type": "multipart/form-data",
                 },
             })
 
             onAnalysisComplete(response.data)
-        } catch (error) {
+        } catch (error: any) {
             console.error("Analysis failed", error)
-            alert("Analysis failed. Please try again.")
+            const errorMessage = error.response?.data?.error || error.message || "Analysis failed. Please try again."
+            alert(errorMessage)
         } finally {
             setIsLoading(false)
         }
