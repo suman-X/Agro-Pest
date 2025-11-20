@@ -6,19 +6,43 @@ import analyzeRoutes from './routes/analyze.routes';
 
 const app = express();
 
-app.use(cors());
+// CORS configuration for production
+app.use(cors({
+    origin: process.env.NODE_ENV === 'production' 
+        ? ['https://agro-pest.vercel.app', 'https://*.vercel.app']
+        : '*',
+    credentials: true
+}));
+
 app.use(express.json());
 
 // Routes
 app.use('/analyze', analyzeRoutes);
 
 app.get('/', (req, res) => {
-    res.send('Smart Pest Detection API');
+    res.json({ 
+        message: 'Smart Pest Detection API',
+        status: 'running',
+        version: '1.0.0'
+    });
+});
+
+app.get('/health', (req, res) => {
+    res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
 // Initialize DB and start server
 initDb().then(() => {
-    app.listen(env.PORT, () => {
-        console.log(`Server running on port ${env.PORT}`);
+    const PORT = process.env.PORT || env.PORT;
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+        console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+}).catch(err => {
+    console.error('Failed to initialize database:', err);
+    // Start server anyway (database is optional)
+    const PORT = process.env.PORT || env.PORT;
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT} (without database)`);
     });
 });
