@@ -13,6 +13,8 @@
         "src/**/*"
     ],
     "exclude": [
-        "node_modules"
+        "node_modules",
+        "src/list-models.ts",
+        "src/test-gemini.ts"
     ]
 }
