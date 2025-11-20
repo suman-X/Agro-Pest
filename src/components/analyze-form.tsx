@@ -37,7 +37,11 @@ export function AnalyzeForm({ onAnalysisComplete }: AnalyzeFormProps) {
     const startCamera = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'environment' } // Use back camera on mobile
+                video: { 
+                    facingMode: { exact: 'environment' }, // Force back camera
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                } 
             })
             if (videoRef.current) {
                 videoRef.current.srcObject = stream
@@ -45,8 +49,20 @@ export function AnalyzeForm({ onAnalysisComplete }: AnalyzeFormProps) {
                 setUploadMethod('capture')
             }
         } catch (error) {
-            console.error("Camera access denied", error)
-            alert("Unable to access camera. Please check permissions.")
+            // Fallback if exact environment camera not available
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' }
+                })
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream
+                    setIsCameraActive(true)
+                    setUploadMethod('capture')
+                }
+            } catch (fallbackError) {
+                console.error("Camera access denied", fallbackError)
+                alert("Unable to access camera. Please check permissions or use file upload.")
+            }
         }
     }
 
@@ -186,6 +202,7 @@ export function AnalyzeForm({ onAnalysisComplete }: AnalyzeFormProps) {
                             id="file-upload"
                             type="file"
                             accept="image/*"
+                            capture="environment"
                             onChange={handleFileChange}
                             className="hidden"
                         />
