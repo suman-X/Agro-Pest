@@ -1,10 +1,19 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
 import { env } from './config/env';
 import { initDb } from './db';
 import analyzeRoutes from './routes/analyze.routes';
 
 const app = express();
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    console.log('Created uploads directory');
+}
 
 // CORS configuration for production
 app.use(cors({
