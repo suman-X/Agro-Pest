@@ -15,11 +15,24 @@ if (!fs.existsSync(uploadsDir)) {
     console.log('Created uploads directory');
 }
 
-// CORS configuration for production
+// CORS configuration for production and development
+const allowedOrigins = [
+    'https://agro-pest.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:3002',
+];
+
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production' 
-        ? ['https://agro-pest.vercel.app', 'https://*.vercel.app']
-        : '*',
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true
 }));
 
@@ -29,7 +42,7 @@ app.use(express.json());
 app.use('/analyze', analyzeRoutes);
 
 app.get('/', (req, res) => {
-    res.json({ 
+    res.json({
         message: 'Smart Pest Detection API',
         status: 'running',
         version: '1.0.0'
@@ -56,7 +69,7 @@ const startServer = async () => {
     } catch (err) {
         console.error('Database initialization failed:', err);
     }
-    
+
     const PORT = process.env.PORT || env.PORT;
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
