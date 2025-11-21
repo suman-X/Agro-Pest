@@ -56,38 +56,67 @@ export default function AnalyzeForm({
 
   const capturePhoto = async () => {
     try {
+      // Request camera access
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
+        video: {
+          facingMode: { ideal: "environment" }, // Prefer back camera on mobile
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
       });
 
+      // Create video element
       const video = document.createElement("video");
       video.srcObject = stream;
-      video.play();
+      video.setAttribute("playsinline", "true"); // Important for iOS
+      await video.play();
 
+      // Wait for video to be ready
       await new Promise((resolve) => {
         video.onloadedmetadata = resolve;
       });
 
+      // Give camera a moment to adjust
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Create canvas and capture frame
       const canvas = document.createElement("canvas");
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext("2d");
-      ctx?.drawImage(video, 0, 0);
 
+      if (!ctx) {
+        throw new Error("Could not get canvas context");
+      }
+
+      ctx.drawImage(video, 0, 0);
+
+      // Stop all tracks
       stream.getTracks().forEach((track) => track.stop());
 
+      // Convert to blob and create file
       canvas.toBlob((blob) => {
         if (blob) {
-          const file = new File([blob], "camera-capture.jpg", {
+          const file = new File([blob], `camera-${Date.now()}.jpg`, {
             type: "image/jpeg",
           });
           setValue("image", file);
           setPreview(canvas.toDataURL("image/jpeg"));
           setError("");
+        } else {
+          setError("Failed to capture photo. Please try again.");
         }
-      }, "image/jpeg");
-    } catch (err) {
-      setError("Failed to access camera. Please try uploading a file instead.");
+      }, "image/jpeg", 0.9);
+
+    } catch (err: any) {
+      console.error("Camera error:", err);
+      if (err.name === "NotAllowedError") {
+        setError("Camera access denied. Please allow camera access and try again.");
+      } else if (err.name === "NotFoundError") {
+        setError("No camera found. Please use the upload option instead.");
+      } else {
+        setError("Failed to access camera. Please try uploading a file instead.");
+      }
     }
   };
 
@@ -106,20 +135,39 @@ export default function AnalyzeForm({
 
       const formData = new FormData();
       formData.append("image", data.image);
+      formData.append("crop_type", "Unknown"); // Add crop_type field
       formData.append("location", data.location);
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-      const response = await axios.post(`${apiUrl}/api/analyze`, formData, {
+
+      console.log('Sending analysis request to:', `${apiUrl}/analyze`);
+
+      const response = await axios.post(`${apiUrl}/analyze`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
+        timeout: 60000, // 60 second timeout
       });
 
+      console.log('Analysis response received:', response.data);
       onAnalysisComplete(response.data);
+
     } catch (err: any) {
-      setError(
-        err.response?.data?.error || "Analysis failed. Please try again."
-      );
+      console.error('Analysis error:', err);
+
+      let errorMessage = "Analysis failed. Please try again.";
+
+      if (err.code === 'ECONNABORTED') {
+        errorMessage = "Request timed out. Please check your internet connection and try again.";
+      } else if (err.code === 'ERR_NETWORK') {
+        errorMessage = "Cannot connect to server. Please ensure the backend is running.";
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.message) {
+        errorMessage = `Error: ${err.message}`;
+      }
+
+      setError(errorMessage);
       onAnalysisComplete(null);
     }
   };
@@ -150,7 +198,6 @@ export default function AnalyzeForm({
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
                 onChange={handleFileChange}
                 className="hidden"
                 id="file-upload"

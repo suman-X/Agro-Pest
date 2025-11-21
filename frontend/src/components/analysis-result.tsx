@@ -40,16 +40,52 @@ interface AnalysisResultProps {
   };
 }
 
-export default function AnalysisResult({ result }: AnalysisResultProps) {
+export default function AnalysisResult({ result }: { result: any }) {
+  // Helper to safely render array items
   const renderArrayItem = (item: any) => {
-    if (typeof item === "string") {
-      return item;
-    }
-    if (typeof item === "object" && item.name) {
-      return item.dosage ? `${item.name} (${item.dosage})` : item.name;
+    if (!item) return null;
+    if (typeof item === "string") return item;
+    if (typeof item === "object") {
+      // Handle {name, dosage} objects
+      if (item.name) {
+        return item.dosage ? `${item.name} (${item.dosage})` : item.name;
+      }
+      // Handle nested objects or other structures by stringifying or picking a property
+      return item.label || item.value || JSON.stringify(item);
     }
     return String(item);
   };
+
+  // Adapt backend data structure to component needs
+  const diagnosis = result.diagnosis || {
+    disease_name: result.label || "Unknown",
+    confidence: result.confidence || 0,
+    symptoms: result.symptoms || [],
+    severity: result.severity || "Unknown"
+  };
+
+  const weather = result.weather || {
+    temperature: result.weather_risk?.forecast?.temp || 0,
+    humidity: result.weather_risk?.forecast?.humidity || 0,
+    conditions: result.weather_risk?.forecast?.condition || "Unknown",
+    risk_level: result.weather_risk?.risk_level || "Unknown",
+    risk_factors: result.weather_risk?.alert ? [result.weather_risk.alert] : []
+  };
+
+  const treatment = result.treatment || {
+    immediate_steps: result.treatment?.steps || [], // Backend returns 'steps', frontend expects 'immediate_steps'
+    chemical_options: [],
+    organic_options: [],
+    prevention: [],
+    estimated_recovery: "Unknown"
+  };
+
+  // Ensure treatment arrays exist
+  const immediate_steps = treatment.immediate_steps || treatment.steps || [];
+  const chemical_options = treatment.chemical_options || [];
+  const organic_options = treatment.organic_options || [];
+  const prevention = treatment.prevention || [];
+  const estimated_recovery = treatment.estimated_recovery || "Unknown";
 
   return (
     <div className="space-y-6">
@@ -64,22 +100,21 @@ export default function AnalysisResult({ result }: AnalysisResultProps) {
         <CardContent className="space-y-4">
           <div>
             <h3 className="text-2xl font-bold text-gray-900">
-              {result.diagnosis.disease_name}
+              {diagnosis.disease_name}
             </h3>
             <div className="flex items-center gap-4 mt-2">
               <span className="text-sm text-gray-600">
-                Confidence: {result.diagnosis.confidence}%
+                Confidence: {diagnosis.confidence}%
               </span>
               <span
-                className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  result.diagnosis.severity === "High"
+                className={`px-3 py-1 rounded-full text-sm font-medium ${diagnosis.severity === "High"
                     ? "bg-red-100 text-red-700"
-                    : result.diagnosis.severity === "Moderate"
-                    ? "bg-yellow-100 text-yellow-700"
-                    : "bg-green-100 text-green-700"
-                }`}
+                    : diagnosis.severity === "Moderate"
+                      ? "bg-yellow-100 text-yellow-700"
+                      : "bg-green-100 text-green-700"
+                  }`}
               >
-                {result.diagnosis.severity} Severity
+                {diagnosis.severity} Severity
               </span>
             </div>
           </div>
@@ -87,7 +122,7 @@ export default function AnalysisResult({ result }: AnalysisResultProps) {
           <div>
             <h4 className="font-semibold text-gray-900 mb-2">Symptoms:</h4>
             <ul className="list-disc list-inside space-y-1">
-              {result.diagnosis.symptoms.map((symptom, index) => (
+              {diagnosis.symptoms.map((symptom: any, index: number) => (
                 <li key={index} className="text-gray-700">
                   {renderArrayItem(symptom)}
                 </li>
@@ -111,21 +146,21 @@ export default function AnalysisResult({ result }: AnalysisResultProps) {
               <Thermometer className="w-5 h-5 text-red-500" />
               <div>
                 <p className="text-sm text-gray-600">Temperature</p>
-                <p className="font-semibold">{result.weather.temperature}°C</p>
+                <p className="font-semibold">{weather.temperature}°C</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <Droplets className="w-5 h-5 text-blue-500" />
               <div>
                 <p className="text-sm text-gray-600">Humidity</p>
-                <p className="font-semibold">{result.weather.humidity}%</p>
+                <p className="font-semibold">{weather.humidity}%</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <Wind className="w-5 h-5 text-gray-500" />
               <div>
                 <p className="text-sm text-gray-600">Conditions</p>
-                <p className="font-semibold">{result.weather.conditions}</p>
+                <p className="font-semibold">{weather.conditions}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -133,15 +168,14 @@ export default function AnalysisResult({ result }: AnalysisResultProps) {
               <div>
                 <p className="text-sm text-gray-600">Risk Level</p>
                 <p
-                  className={`font-semibold ${
-                    result.weather.risk_level === "High"
+                  className={`font-semibold ${weather.risk_level === "High"
                       ? "text-red-600"
-                      : result.weather.risk_level === "Moderate"
-                      ? "text-yellow-600"
-                      : "text-green-600"
-                  }`}
+                      : weather.risk_level === "Moderate"
+                        ? "text-yellow-600"
+                        : "text-green-600"
+                    }`}
                 >
-                  {result.weather.risk_level}
+                  {weather.risk_level}
                 </p>
               </div>
             </div>
@@ -150,9 +184,9 @@ export default function AnalysisResult({ result }: AnalysisResultProps) {
           <div>
             <h4 className="font-semibold text-gray-900 mb-2">Risk Factors:</h4>
             <ul className="list-disc list-inside space-y-1">
-              {result.weather.risk_factors.map((factor, index) => (
+              {weather.risk_factors.map((factor: any, index: number) => (
                 <li key={index} className="text-gray-700">
-                  {factor}
+                  {renderArrayItem(factor)}
                 </li>
               ))}
             </ul>
@@ -174,7 +208,7 @@ export default function AnalysisResult({ result }: AnalysisResultProps) {
               Immediate Steps:
             </h4>
             <ol className="list-decimal list-inside space-y-1">
-              {result.treatment.immediate_steps.map((step, index) => (
+              {immediate_steps.map((step: any, index: number) => (
                 <li key={index} className="text-gray-700">
                   {renderArrayItem(step)}
                 </li>
@@ -187,7 +221,7 @@ export default function AnalysisResult({ result }: AnalysisResultProps) {
               Chemical Options:
             </h4>
             <ul className="list-disc list-inside space-y-1">
-              {result.treatment.chemical_options.map((option, index) => (
+              {chemical_options.map((option: any, index: number) => (
                 <li key={index} className="text-gray-700">
                   {renderArrayItem(option)}
                 </li>
@@ -200,7 +234,7 @@ export default function AnalysisResult({ result }: AnalysisResultProps) {
               Organic Options:
             </h4>
             <ul className="list-disc list-inside space-y-1">
-              {result.treatment.organic_options.map((option, index) => (
+              {organic_options.map((option: any, index: number) => (
                 <li key={index} className="text-gray-700">
                   {renderArrayItem(option)}
                 </li>
@@ -211,7 +245,7 @@ export default function AnalysisResult({ result }: AnalysisResultProps) {
           <div>
             <h4 className="font-semibold text-gray-900 mb-2">Prevention:</h4>
             <ul className="list-disc list-inside space-y-1">
-              {result.treatment.prevention.map((tip, index) => (
+              {prevention.map((tip: any, index: number) => (
                 <li key={index} className="text-gray-700">
                   {renderArrayItem(tip)}
                 </li>
@@ -221,7 +255,7 @@ export default function AnalysisResult({ result }: AnalysisResultProps) {
 
           <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
             <p className="text-sm font-medium text-blue-900">
-              Estimated Recovery Time: {result.treatment.estimated_recovery}
+              Estimated Recovery Time: {estimated_recovery}
             </p>
           </div>
         </CardContent>

@@ -59,59 +59,99 @@ TASK:
 `;
 
 export const analyzeImage = async (imagePath: string, cropType: string, location: string) => {
-    // Use the current stable model that supports images
     const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash-exp', 'gemini-1.5-flash'];
+    const MAX_RETRIES = 3;
+
+    let lastError: Error | null = null;
 
     for (const modelName of modelsToTry) {
-        try {
-            console.log(`Attempting analysis with model: ${modelName}`);
-            const model = genAI.getGenerativeModel({ model: modelName });
+        // Try each model with retries
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                console.log(`[Attempt ${attempt}/${MAX_RETRIES}] Using model: ${modelName}`);
+                const model = genAI.getGenerativeModel({ model: modelName });
 
-            const imageBuffer = fs.readFileSync(imagePath);
-            const imageBase64 = imageBuffer.toString('base64');
+                const imageBuffer = fs.readFileSync(imagePath);
+                const imageBase64 = imageBuffer.toString('base64');
 
-            const prompt = PEST_DETECTION_PROMPT(cropType, location);
+                const prompt = PEST_DETECTION_PROMPT(cropType, location);
 
-            const result = await model.generateContent([
-                prompt,
-                {
-                    inlineData: {
-                        data: imageBase64,
-                        mimeType: 'image/jpeg',
-                    },
-                },
-            ]);
+                // Generate content with timeout
+                const result = await Promise.race([
+                    model.generateContent([
+                        prompt,
+                        {
+                            inlineData: {
+                                data: imageBase64,
+                                mimeType: 'image/jpeg',
+                            },
+                        },
+                    ]),
+                    new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('Request timeout')), 30000)
+                    )
+                ]) as any;
 
-            const response = await result.response;
-            const text = response.text();
+                const response = await result.response;
+                const text = response.text();
 
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) throw new Error('Failed to parse JSON from Gemini response');
+                const jsonMatch = text.match(/\{[\s\S]*\}/);
+                if (!jsonMatch) {
+                    throw new Error('Failed to parse JSON from Gemini response');
+                }
 
-            const detectionResult = JSON.parse(jsonMatch[0]);
+                const detectionResult = JSON.parse(jsonMatch[0]);
 
-            // Treatment generation
-            const treatmentPrompt = TREATMENT_PROMPT(detectionResult.label, cropType, detectionResult.severity, location);
-            const treatmentResult = await model.generateContent(treatmentPrompt);
-            const treatmentResponse = await treatmentResult.response;
-            const treatmentText = treatmentResponse.text();
+                // Treatment generation with retry
+                const treatmentPrompt = TREATMENT_PROMPT(
+                    detectionResult.label,
+                    cropType,
+                    detectionResult.severity,
+                    location
+                );
 
-            const treatmentJsonMatch = treatmentText.match(/\{[\s\S]*\}/);
-            const treatmentData = treatmentJsonMatch ? JSON.parse(treatmentJsonMatch[0]) : {};
+                const treatmentResult = await Promise.race([
+                    model.generateContent(treatmentPrompt),
+                    new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('Treatment request timeout')), 30000)
+                    )
+                ]) as any;
 
-            return {
-                ...detectionResult,
-                treatment: treatmentData
-            };
+                const treatmentResponse = await treatmentResult.response;
+                const treatmentText = treatmentResponse.text();
 
-        } catch (error: any) {
-            console.error(`Failed with model ${modelName}:`, error.message);
-            // If this was the last model, throw the error
-            if (modelName === modelsToTry[modelsToTry.length - 1]) {
-                throw error;
+                const treatmentJsonMatch = treatmentText.match(/\{[\s\S]*\}/);
+                const treatmentData = treatmentJsonMatch ? JSON.parse(treatmentJsonMatch[0]) : {
+                    summary: "Treatment recommendations unavailable",
+                    steps: ["Consult with a local agricultural expert"],
+                    chemical_options: [],
+                    organic_options: [],
+                    prevention: []
+                };
+
+                console.log(`✅ Analysis successful with ${modelName}`);
+                return {
+                    ...detectionResult,
+                    treatment: treatmentData
+                };
+
+            } catch (error: any) {
+                lastError = error;
+                console.error(`❌ Attempt ${attempt} failed with ${modelName}:`, error.message);
+
+                // If not the last attempt, wait before retrying (exponential backoff)
+                if (attempt < MAX_RETRIES) {
+                    const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+                    console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                } else if (modelName !== modelsToTry[modelsToTry.length - 1]) {
+                    console.log(`🔄 Trying next model...`);
+                }
             }
-            // Otherwise continue to next model
-            console.log('Trying next model...');
         }
     }
+
+    // If all models and retries failed, throw the last error
+    console.error('❌ All models and retries exhausted');
+    throw lastError || new Error('Analysis failed after all retry attempts');
 };

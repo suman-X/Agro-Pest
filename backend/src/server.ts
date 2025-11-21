@@ -40,18 +40,28 @@ app.get('/health', (req, res) => {
     res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
+// Global error handlers to prevent crashes
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+});
+
 // Initialize DB and start server
-initDb().then(() => {
+const startServer = async () => {
+    try {
+        await initDb();
+    } catch (err) {
+        console.error('Database initialization failed:', err);
+    }
+    
     const PORT = process.env.PORT || env.PORT;
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
         console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     });
-}).catch(err => {
-    console.error('Failed to initialize database:', err);
-    // Start server anyway (database is optional)
-    const PORT = process.env.PORT || env.PORT;
-    app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT} (without database)`);
-    });
-});
+};
+
+startServer();
