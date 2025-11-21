@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import AnalyzeForm from "../../components/analyze-form";
-import AnalysisResult from "../../components/analysis-result";
+import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import AnalysisResult from "../../components/analysis-result";
+
+// Dynamically import client-only form to avoid non-serializable prop boundary issues
+const AnalyzeForm = dynamic(() => import("../../components/analyze-form"), { ssr: false });
 import { Leaf } from "lucide-react";
 
 export default function AnalyzePage() {
