@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { Button } from "../components/ui/button";
 import { Leaf, Camera, Cloud } from "lucide-react";
 
 export default function Home() {

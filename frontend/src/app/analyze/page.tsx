@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import AnalyzeForm from "@/components/analyze-form";
-import AnalysisResult from "@/components/analysis-result";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import AnalyzeForm from "../../components/analyze-form";
+import AnalysisResult from "../../components/analysis-result";
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Leaf } from "lucide-react";
 
 export default function AnalyzePage() {
